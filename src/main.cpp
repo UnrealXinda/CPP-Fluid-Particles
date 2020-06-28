@@ -33,6 +33,12 @@
 #include "PBDSolver.h"
 #include "SPHSystem.h"
 
+#include "FluidParticles.h"
+#include "FluidSolver.h"
+#include "FluidSystem.h"
+
+#define MODE 0
+
 // vbo and GL variables
 static GLuint particlesVBO;
 static GLuint particlesColorVBO;
@@ -49,9 +55,7 @@ static float zoom = 0.3f;
 static int frameId = 0;
 static float totalTime = 0.0f;
 bool running = false;
-// particle system variables
-std::shared_ptr<SPHSystem> pSystem;
-const float3 spaceSize = make_float3(1.0f);
+const float3 spaceSize = make_float3(3.0f, 1.0f, 1.0f);
 const float sphSpacing = 0.02f;
 const float sphSmoothingRadius = 2.0f * sphSpacing;
 const float sphCellLength = 1.01f * sphSmoothingRadius;
@@ -66,9 +70,21 @@ const float sphSurfaceTensionIntensity = 0.0001f;
 const float sphAirPressure = 0.0001f;
 const int3 cellSize = make_int3(ceil(spaceSize.x / sphCellLength), ceil(spaceSize.y / sphCellLength), ceil(spaceSize.z / sphCellLength));
 
+#if MODE == 0
+// particle system variables
+std::shared_ptr<SPHSystem> pSystem;
+#else
+std::shared_ptr<FSPHParticles> fluidParticles;
+std::shared_ptr<FBoundaryParticles> boundaryParticles;
+std::shared_ptr<FFluidSolver> pSolver;
+std::shared_ptr<FFluidSystem> pSystem;
+#endif
+
 namespace fluid_solver {
-	enum { SPH, DFSPH, PBD};
+	enum { SPH, DFSPH, PBD };
 }
+
+#if MODE == 0
 
 void initSPHSystem(const int solver = fluid_solver::PBD) {
 	// initiate fluid particles
@@ -98,10 +114,10 @@ void initSPHSystem(const int solver = fluid_solver::PBD) {
 	}
 	// top and bottom
 	for (auto i = 0; i < compactSize.x; ++i) {
-		for (auto j = 0; j < compactSize.z-2; ++j) {
-			auto x = make_float3(i, 0, j+1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+		for (auto j = 0; j < compactSize.z - 2; ++j) {
+			auto x = make_float3(i, 0, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
 			pos.push_back(0.99f * x + 0.005f * spaceSize);
-			x = make_float3(i, compactSize.y - 1, j+1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			x = make_float3(i, compactSize.y - 1, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
 			pos.push_back(0.99f * x + 0.005f * spaceSize);
 		}
 	}
@@ -127,12 +143,103 @@ void initSPHSystem(const int solver = fluid_solver::PBD) {
 	default:
 		pSolver = std::make_shared<BasicSPHSolver>(fluidParticles->size());
 		break;
-	}	
+	}
 	pSystem = std::make_shared<SPHSystem>(fluidParticles, boundaryParticles, pSolver,
 		spaceSize, sphCellLength, sphSmoothingRadius, dt, sphM0,
-		sphRho0, sphRhoBoundary, sphStiff, sphVisc, 
+		sphRho0, sphRhoBoundary, sphStiff, sphVisc,
 		sphSurfaceTensionIntensity, sphAirPressure, sphG, cellSize);
 }
+
+#else
+
+void initSPHSystem(const int solver = fluid_solver::PBD) {
+	// initiate fluid particles
+	std::vector<float3> pos;
+	for (auto i = 0; i < 36; ++i) {
+		for (auto j = 0; j < 24; ++j) {
+			for (auto k = 0; k < 24; ++k) {
+				auto x = make_float3(0.27f + sphSpacing * j,
+					0.10f + sphSpacing * i,
+					0.27f + sphSpacing * k);
+				pos.push_back(x);
+			}
+		}
+	}
+	fluidParticles = std::make_shared<FSPHParticles>(reinterpret_cast<float*>(&pos[0]), pos.size());
+
+	// initiate boundary particles
+	pos.clear();
+	const auto compactSize = 2 * make_int3(ceil(spaceSize.x / sphCellLength), ceil(spaceSize.y / sphCellLength), ceil(spaceSize.z / sphCellLength));
+	// front and back
+	for (auto i = 0; i < compactSize.x; ++i) {
+		for (auto j = 0; j < compactSize.y; ++j) {
+			auto x = make_float3(i, j, 0) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+			x = make_float3(i, j, compactSize.z - 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+		}
+	}
+	// top and bottom
+	for (auto i = 0; i < compactSize.x; ++i) {
+		for (auto j = 0; j < compactSize.z - 2; ++j) {
+			auto x = make_float3(i, 0, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+			x = make_float3(i, compactSize.y - 1, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+		}
+	}
+	// left and right
+	for (auto i = 0; i < compactSize.y - 2; ++i) {
+		for (auto j = 0; j < compactSize.z - 2; ++j) {
+			auto x = make_float3(0, i + 1, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+			x = make_float3(compactSize.x - 1, i + 1, j + 1) / make_float3(compactSize - make_int3(1)) * spaceSize;
+			pos.push_back(0.99f * x + 0.005f * spaceSize);
+		}
+	}
+	boundaryParticles = std::make_shared<FBoundaryParticles>(reinterpret_cast<float*>(&pos[0]), pos.size());
+
+	// initiate solver and particle system
+	ESPHSolver solverType;
+	switch (solver) {
+	case fluid_solver::PBD:
+		solverType = ESPHSolver::PBD;
+		break;
+	case fluid_solver::DFSPH:
+		solverType = ESPHSolver::DFSPH;
+		break;
+	default:
+		solverType = ESPHSolver::WCSPH;
+		break;
+	}
+
+	pSolver = std::make_shared<FFluidSolver>(solverType, fluidParticles->Size());
+
+	FFluidSystemConfig config;
+	config.SpaceSizeX = spaceSize.x;
+	config.SpaceSizeY = spaceSize.y;
+	config.SpaceSizeZ = spaceSize.z;
+	config.GX = sphG.x;
+	config.GY = sphG.y;
+	config.GZ = sphG.z;
+	config.CellLength = sphCellLength;
+	config.SmoothingRadius= sphSmoothingRadius;
+	config.TimeStep=dt;
+	config.M0= sphM0;
+	config.Rho0= sphRho0;
+	config.RhoBoundary= sphRhoBoundary;
+	config.Stiff= sphStiff;
+	config.Visc= sphVisc;
+	config.SurfaceTensionIntensity= sphSurfaceTensionIntensity;
+	config.AirPressure= sphAirPressure;
+	config.CellSizeX = cellSize.x;
+	config.CellSizeY = cellSize.y;
+	config.CellSizeZ = cellSize.z;
+
+	pSystem = std::make_shared<FFluidSystem>(*fluidParticles, *boundaryParticles, *pSolver, config);
+}
+
+#endif
 
 void createVBO(GLuint* vbo, const unsigned int length) {
 	// create buffer object
@@ -168,6 +275,8 @@ namespace particle_attributes {
 	enum { POSITION, COLOR, SIZE, };
 }
 
+#if MODE == 0
+
 void initGL(void) {
 	// create VBOs
 	createVBO(&particlesVBO, sizeof(float3) * pSystem->size());
@@ -178,6 +287,21 @@ void initGL(void) {
 	ShaderUtility::attachAndLinkProgram(m_particles_program, ShaderUtility::loadShaders("particles.vert", "particles.frag"));
 	return;
 }
+
+#else
+
+void initGL(void) {
+	// create VBOs
+	createVBO(&particlesVBO, sizeof(float3) * pSystem->Size());
+	createVBO(&particlesColorVBO, sizeof(float3) * pSystem->Size());
+	// initiate shader program
+	m_particles_program = glCreateProgram();
+	glBindAttribLocation(m_particles_program, particle_attributes::SIZE, "pointSize");
+	ShaderUtility::attachAndLinkProgram(m_particles_program, ShaderUtility::loadShaders("particles.vert", "particles.frag"));
+	return;
+}
+
+#endif
 
 void mouseFunc(const int button, const int state, const int x, const int y) {
 	if (GLUT_DOWN == state) {
@@ -267,6 +391,9 @@ void keyboardFunc(const unsigned char key, const int x, const int y) {
 
 extern "C" void generate_dots(float3* dot, float3* color, const std::shared_ptr<SPHParticles> particles);
 
+
+#if MODE == 0
+
 void renderParticles(void) {
 	// map OpenGL buffer object for writing from CUDA
 	float3 *dptr;
@@ -301,13 +428,65 @@ void oneStep() {
 	++frameId;
 	const auto milliseconds = pSystem->step();
 	totalTime += milliseconds;
-	printf("Frame %d - %2.2f ms, avg time - %2.2f ms/frame (%3.2f FPS)\r", 
-		frameId%10000, milliseconds, totalTime / float(frameId), float(frameId)*1000.0f/totalTime);
+	printf("Frame %d - %2.2f ms, avg time - %2.2f ms/frame (%3.2f FPS)\r",
+		frameId % 10000, milliseconds, totalTime / float(frameId), float(frameId)*1000.0f / totalTime);
 }
+
+#else
+
+void renderParticles(void) {
+	// map OpenGL buffer object for writing from CUDA
+	float3 *dptr;
+	float3 *cptr;
+	CUDA_CALL(cudaGLMapBufferObject((void**)&dptr, particlesVBO));
+	CUDA_CALL(cudaGLMapBufferObject((void**)&cptr, particlesColorVBO));
+
+	// calculate the dots' position and color
+	generate_dots(dptr, cptr, pSystem->getFluids());
+
+	// unmap buffer object
+	CUDA_CALL(cudaGLUnmapBufferObject(particlesVBO));
+	CUDA_CALL(cudaGLUnmapBufferObject(particlesColorVBO));
+
+
+	glBindBuffer(GL_ARRAY_BUFFER, particlesVBO);
+	glVertexPointer(3, GL_FLOAT, 0, nullptr);
+	glEnableClientState(GL_VERTEX_ARRAY);
+
+	glBindBuffer(GL_ARRAY_BUFFER, particlesColorVBO);
+	glColorPointer(3, GL_FLOAT, 0, nullptr);
+	glEnableClientState(GL_COLOR_ARRAY);
+
+	glDrawArrays(GL_POINTS, 0, pSystem->Size());
+
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+	return;
+}
+
+void oneStep() {
+	++frameId;
+	const auto milliseconds = pSystem->Step();
+	totalTime += milliseconds;
+	printf("Frame %d - %2.2f ms, avg time - %2.2f ms/frame (%3.2f FPS)\r",
+		frameId % 10000, milliseconds, totalTime / float(frameId), float(frameId)*1000.0f / totalTime);
+}
+
+#endif
 
 void displayFunc(void) {
 	if (running) {
 		oneStep();
+		oneStep();
+		oneStep();
+		oneStep();
+
+		//float frameTime = 0.016f;
+		//while (frameTime > 0)
+		//{
+		//	frameTime -= dt;
+		//	pSystem->step();
+		//}
 	}
 	////////////////////
 	glClearColor(0.9f, 0.9f, 0.92f, 1.0f);
@@ -330,7 +509,7 @@ void displayFunc(void) {
 	glLineWidth(1.0);
 	////////////////////
 	glEnable(GL_MULTISAMPLE_ARB);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); 
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	glutSolidCube(1.0);
 	////////////////////
 	glUseProgram(m_particles_program);
@@ -348,11 +527,11 @@ void displayFunc(void) {
 	////////////////////
 	glPopMatrix();
 	glutSwapBuffers();
-	glutPostRedisplay(); 
+	glutPostRedisplay();
 }
 
 int main(int argc, char* argv[]) {
-	try{
+	try {
 		glutInit(&argc, argv);
 		glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_MULTISAMPLE);
 		glutInitWindowPosition(400, 0);

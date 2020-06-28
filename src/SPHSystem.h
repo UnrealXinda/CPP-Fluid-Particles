@@ -17,6 +17,10 @@
 
 #pragma once
 
+#include <cuda_runtime.h>
+#include "SPHParticles.h"
+#include "BaseSolver.h"
+
 class SPHSystem {
 public:
 	SPHSystem(
@@ -40,6 +44,8 @@ public:
 	SPHSystem& operator=(const SPHSystem&) = delete;
 
 	float step();
+
+	float step(float dt);
 
 	int size() const {
 		return fluidSize();

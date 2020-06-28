@@ -128,6 +128,11 @@ void SPHSystem::neighborSearch(const std::shared_ptr<SPHParticles> &particles, D
 
 float SPHSystem::step()
 {
+	return step(_dt);
+}
+
+float SPHSystem::step(float dt)
+{
 	cudaEvent_t start, stop;
 	CUDA_CALL(cudaEventCreate(&start));
 	CUDA_CALL(cudaEventCreate(&stop));
@@ -137,7 +142,7 @@ float SPHSystem::step()
 	try {
 		_solver->step(_fluids, _boundaries, cellStartFluid, cellStartBoundary,
 			_spaceSize, _cellSize, _sphCellLength, _sphSmoothingRadius,
-			_dt, _sphRho0, _sphRhoBoundary, _sphStiff, _sphVisc, _sphG,
+			dt, _sphRho0, _sphRhoBoundary, _sphStiff, _sphVisc, _sphG,
 			_sphSurfaceTensionIntensity, _sphAirPressure);
 		cudaDeviceSynchronize(); CHECK_KERNEL();
 	}
@@ -145,7 +150,7 @@ float SPHSystem::step()
 		std::cout << s << "\n";
 	}
 	catch (...) {
-		std::cout << "Unknown Exception at "<<__FILE__<<": line "<<__LINE__ << "\n";
+		std::cout << "Unknown Exception at " << __FILE__ << ": line " << __LINE__ << "\n";
 	}
 
 	float milliseconds;

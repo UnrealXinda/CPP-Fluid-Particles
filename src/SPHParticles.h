@@ -17,6 +17,11 @@
 
 #pragma once
 
+#include <vector>
+#include "Particles.h"
+#include "DArray.h"
+
+
 class SPHParticles final : public Particles {
 public:
 	explicit SPHParticles::SPHParticles(const std::vector<float3>& p)
@@ -24,8 +29,29 @@ public:
 		pressure(p.size()),
 		density(p.size()),
 		mass(p.size()),
-		particle2Cell(p.size()) {
+		particle2Cell(p.size()),
+		transforms(p.size() * 16) {
 		CUDA_CALL(cudaMemcpy(pos.addr(), &p[0], sizeof(float3) * p.size(), cudaMemcpyHostToDevice));
+	}
+
+	SPHParticles::SPHParticles(float3* p, int size)
+		:Particles(p, size),
+		pressure(size),
+		density(size),
+		mass(size),
+		particle2Cell(size),
+		transforms(size * 16) {
+		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float3) * size, cudaMemcpyHostToDevice));
+	}
+
+	SPHParticles::SPHParticles(float* p, int size)
+		:Particles(p, size),
+		pressure(size),
+		density(size),
+		mass(size),
+		particle2Cell(size),
+		transforms(size * 16) {
+		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float) * 3 * size, cudaMemcpyHostToDevice));
 	}
 
 	SPHParticles(const SPHParticles&) = delete;
@@ -49,6 +75,10 @@ public:
 	float* getMassPtr() const {
 		return mass.addr();
 	}
+	float* getTransformsPtr() const {
+		return transforms.addr();
+	}
+	void populateTransforms();
 
 	virtual ~SPHParticles() noexcept { }
 
@@ -57,4 +87,6 @@ protected:
 	DArray<float> density;
 	DArray<float> mass;
 	DArray<int> particle2Cell; // lookup key
+
+	DArray<float> transforms;
 };

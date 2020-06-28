@@ -17,11 +17,25 @@
 
 #pragma once
 
+#include <vector>
+#include <cuda_runtime.h>
+#include "DArray.h"
+
 class Particles {
 public:
 	explicit Particles::Particles(const std::vector<float3>& p)
 		:pos(p.size()), vel(p.size()) {
 		CUDA_CALL(cudaMemcpy(pos.addr(), &p[0], sizeof(float3) * p.size(), cudaMemcpyHostToDevice));
+	}
+
+	Particles::Particles(float3* p, int size)
+		: pos(size), vel(size) {
+		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float3) * size, cudaMemcpyHostToDevice));
+	}
+
+	Particles::Particles(float* p, int size)
+		: pos(size), vel(size) {
+		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float) * 3 * size, cudaMemcpyHostToDevice));
 	}
 
 	Particles(const Particles&) = delete;

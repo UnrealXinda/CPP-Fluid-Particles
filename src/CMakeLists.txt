@@ -14,6 +14,9 @@ set(headers
 	SPHParticles.h
 	SPHSystem.h
 	CUDAFunctions.cuh
+	FluidParticles.h
+	FluidSolver.h
+	FluidSystem.h
 	)
 	
 set(source
@@ -25,6 +28,9 @@ set(source
 	vbo.cu
 	ShaderUtility.cpp
 	main.cpp
+	FluidParticles.cpp
+	FluidSolver.cpp
+	FluidSystem.cpp
 	)
 
 add_executable(CPP_Fluid_Particles
