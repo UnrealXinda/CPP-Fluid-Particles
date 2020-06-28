@@ -31,6 +31,7 @@ set(source
 	FluidParticles.cpp
 	FluidSolver.cpp
 	FluidSystem.cpp
+	SPHParticles.cu
 	)
 
 add_executable(CPP_Fluid_Particles

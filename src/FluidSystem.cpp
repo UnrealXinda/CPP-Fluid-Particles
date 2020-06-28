@@ -20,7 +20,7 @@ struct FFluidSystem::FImpl
 				fluidParticles,
 				boundaryParticles,
 				solver,
-				make_float3(config.SpaceSizeX, config.SpaceSizeY, config.SpaceSizeZ),
+				make_float3(config.SpaceSizeY, config.SpaceSizeZ, config.SpaceSizeX), // Convert from Z Up to Y Up
 				config.CellLength,
 				config.SmoothingRadius,
 				config.TimeStep,
@@ -31,8 +31,8 @@ struct FFluidSystem::FImpl
 				config.Visc,
 				config.SurfaceTensionIntensity,
 				config.AirPressure,
-				make_float3(config.GX, config.GY, config.GZ),
-				make_int3(config.CellSizeX, config.CellSizeY, config.CellSizeZ))
+				make_float3(config.GY, config.GZ, config.GX), // Convert from Z Up to Y Up
+				make_int3(config.CellSizeY, config.CellSizeZ, config.CellSizeX)) // Convert from Z Up to Y Up
 		)
 	{}
 

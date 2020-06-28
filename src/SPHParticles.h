@@ -30,28 +30,37 @@ public:
 		density(p.size()),
 		mass(p.size()),
 		particle2Cell(p.size()),
-		transforms(p.size() * 16) {
+		transforms(p.size() * 16),
+		zUp(false) {
 		CUDA_CALL(cudaMemcpy(pos.addr(), &p[0], sizeof(float3) * p.size(), cudaMemcpyHostToDevice));
 	}
 
-	SPHParticles::SPHParticles(float3* p, int size)
+	SPHParticles::SPHParticles(float3* p, int size, bool _zUp = true)
 		:Particles(p, size),
 		pressure(size),
 		density(size),
 		mass(size),
 		particle2Cell(size),
-		transforms(size * 16) {
+		transforms(size * 16),
+		zUp(_zUp) {
 		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float3) * size, cudaMemcpyHostToDevice));
+		if (zUp) {
+			adjustPositionsToZUp();
+		}
 	}
 
-	SPHParticles::SPHParticles(float* p, int size)
+	SPHParticles::SPHParticles(float* p, int size, bool _zUp = true)
 		:Particles(p, size),
 		pressure(size),
 		density(size),
 		mass(size),
 		particle2Cell(size),
-		transforms(size * 16) {
+		transforms(size * 16),
+		zUp(_zUp) {
 		CUDA_CALL(cudaMemcpy(pos.addr(), p, sizeof(float) * 3 * size, cudaMemcpyHostToDevice));
+		if (zUp) {
+			adjustPositionsToZUp();
+		}
 	}
 
 	SPHParticles(const SPHParticles&) = delete;
@@ -78,11 +87,15 @@ public:
 	float* getTransformsPtr() const {
 		return transforms.addr();
 	}
+	void adjustPositionsToZUp();
 	void populateTransforms();
 
 	virtual ~SPHParticles() noexcept { }
 
 protected:
+
+	bool zUp;
+
 	DArray<float> pressure;
 	DArray<float> density;
 	DArray<float> mass;

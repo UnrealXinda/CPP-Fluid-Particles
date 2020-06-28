@@ -29,7 +29,20 @@ __global__ void populateTransforms_CUDA(float* mats, float3* pos, const int num)
 		mat[idx++] = 1.0f;     mat[idx++] = 0.0f;     mat[idx++] = 0.0f;     mat[idx++] = 0.0f;
 		mat[idx++] = 0.0f;     mat[idx++] = 1.0f;     mat[idx++] = 0.0f;     mat[idx++] = 0.0f;
 		mat[idx++] = 0.0f;     mat[idx++] = 0.0f;     mat[idx++] = 1.0f;     mat[idx++] = 0.0f;
-		mat[idx++] = newPos.x; mat[idx++] = newPos.y; mat[idx++] = newPos.z; mat[idx++] = 1.0f;		
+		mat[idx++] = newPos.z; mat[idx++] = newPos.x; mat[idx++] = newPos.y; mat[idx++] = 1.0f;	// Z up	
+	}
+
+	return;
+}
+
+__global__ void adjustPositionsToZUp_CUDA(float3* pos, const int num)
+{
+	const unsigned int i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (i < num)
+	{
+		float3 newPos = make_float3(pos[i].y, pos[i].z, pos[i].x);
+		pos[i] = newPos;
 	}
 
 	return;
@@ -40,4 +53,16 @@ void SPHParticles::populateTransforms()
 	populateTransforms_CUDA << <(size() - 1) / block_size + 1, block_size >> > (
 		transforms.addr(), pos.addr(), size());
 	cudaDeviceSynchronize();
+}
+
+void SPHParticles::adjustPositionsToZUp()
+{
+	thrust::transform(thrust::device,
+		pos.addr(), pos.addr() + size(),
+		pos.addr(),
+		[]__host__ __device__(const float3& p) { return make_float3(p.y, p.z, p.x); }
+	);
+
+	//adjustPositionsToZUp_CUDA << <(size() - 1) / block_size + 1, block_size >> > (pos.addr(), size());
+	//cudaDeviceSynchronize();
 }
